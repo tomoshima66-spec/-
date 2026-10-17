@@ -1,0 +1,1177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>物語エディタ</title>
+<style>
+:root{
+  --bg:#f6f4ef; --panel:#ffffff; --field:#fffdf8; --ink:#23211d; --muted:#6f6a60; --line:#dcd7cb;
+  --accent:#8a4b2d; --accent-ink:#ffffff; --danger:#b3261e; --ok:#2f6f4f; --warn:#8a5a00;
+  --ui-font: system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+  --story-font: "Hiragino Mincho ProN","Yu Mincho","Noto Serif JP","Songti SC",serif;
+  --story-size:17px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#14120f; --panel:#1d1a16; --field:#19160f; --ink:#ece6da; --muted:#9a9384; --line:#35302a;
+    --accent:#d9925f; --accent-ink:#1b130c; --danger:#ff8a80; --ok:#7fd1a4; --warn:#f0c36a;
+  }
+}
+*{box-sizing:border-box}
+html{font-size:calc(16px * var(--ui-scale,1));-webkit-text-size-adjust:100%}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui-font);font-size:0.9375rem;line-height:1.5;display:flex;flex-direction:column;height:var(--app-h,100dvh);overflow:hidden;position:fixed;top:0;left:0;right:0}
+header{flex:none;display:flex;align-items:center;gap:0.625rem;padding:0.5rem 0.75rem;padding-top:max(0.5rem,env(safe-area-inset-top));padding-left:max(0.75rem,env(safe-area-inset-left));padding-right:max(0.75rem,env(safe-area-inset-right));background:var(--panel);border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:1rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+nav{display:flex;gap:0.25rem;margin-left:auto}
+.tab{min-height:2.375rem;padding:0 0.875rem;border:1px solid var(--line);border-radius:62.4375rem;background:transparent;color:var(--ink);font:inherit;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+#msg{flex:none;display:flex;align-items:flex-start;gap:0.5rem;margin:0;padding:0.5rem 0.75rem;font-size:0.875rem;border-bottom:1px solid var(--line);background:var(--panel)}
+#msg[hidden]{display:none}
+#msg.error{color:var(--danger)} #msg.warn{color:var(--warn)} #msg.ok{color:var(--ok)}
+#msg span{flex:1;white-space:pre-wrap;overflow-wrap:anywhere}
+#msg button{flex:none;border:0;background:transparent;color:inherit;font-size:1.125rem;line-height:1;padding:0 0.375rem;cursor:pointer}
+
+main{flex:1;min-height:0;position:relative}
+.panel{position:absolute;inset:0;display:none;flex-direction:column;overflow:auto}
+.panel.active{display:flex}
+#panel-story,#panel-chat{overflow:hidden}
+.pad{padding:0.875rem 0.875rem 1.75rem;padding-left:max(0.875rem,env(safe-area-inset-left));padding-right:max(0.875rem,env(safe-area-inset-right))}
+
+.toolbar{flex:none;display:flex;align-items:center;gap:0.25rem;padding:0.375rem 0.625rem;border-bottom:1px solid var(--line);background:var(--panel);overflow-x:auto}
+.toolbar .muted{margin-left:auto;white-space:nowrap;padding-left:0.5rem}
+.muted{color:var(--muted);font-size:0.8125rem}
+.ghost{min-height:2.125rem;padding:0 0.625rem;border:1px solid transparent;border-radius:0.5rem;background:transparent;cursor:pointer;white-space:nowrap}
+.ghost:hover{border-color:var(--line)}
+
+#f-story{flex:1;min-height:0;width:100%;resize:none;border:0;outline:0;padding:1rem 1rem 1.5rem;background:var(--field);color:var(--ink);font-family:var(--story-font);font-size:var(--story-size);line-height:1.95}
+#f-story[readonly]{opacity:.92}
+
+.actions{flex:none;display:flex;flex-direction:column;gap:0.5rem;padding:0.5rem 0.75rem;padding-bottom:max(0.5rem,env(safe-area-inset-bottom));padding-left:max(0.75rem,env(safe-area-inset-left));padding-right:max(0.75rem,env(safe-area-inset-right));background:var(--panel);border-top:1px solid var(--line)}
+.modebar{display:flex;gap:0.375rem}
+.modebar label{flex:1;display:flex;align-items:center;justify-content:center;min-height:2.375rem;border:1px solid var(--line);border-radius:0.625rem;cursor:pointer;user-select:none}
+.modebar input{position:absolute;opacity:0;pointer-events:none}
+.modebar label:has(input:checked){background:color-mix(in srgb,var(--accent) 16%,transparent);border-color:var(--accent);font-weight:700}
+.modebar label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+#instrBox[hidden]{display:none}
+#instrBox textarea{width:100%;resize:vertical;min-height:3.25rem;max-height:30vh}
+.chips{display:flex;gap:0.375rem;overflow-x:auto;padding:0.375rem 0 2px}
+.chip{flex:none;min-height:2rem;padding:0 0.75rem;border:1px solid var(--line);border-radius:62.4375rem;background:transparent;cursor:pointer;font-size:0.8125rem;white-space:nowrap}
+.btnrow{display:flex;gap:0.375rem}
+.btnrow button{flex:1 1 0;min-width:0;min-height:2.875rem;padding:0 0.25rem;white-space:nowrap;font-size:0.9375rem;border:1px solid var(--line);border-radius:0.75rem;background:var(--field);cursor:pointer;font-weight:600}
+@media (max-width:380px){ .btnrow button{font-size:0.8125rem} }
+.btnrow button[hidden]{display:none}
+.btnrow button.primary{flex:2 1 0;background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btnrow button.danger{flex:2 1 0;border-color:var(--danger);color:var(--danger)}
+.btnrow button:disabled{opacity:.4;cursor:not-allowed}
+
+textarea,input[type=text],input[type=password],input[type=number],input[type=url],select{width:100%;padding:0.625rem 0.75rem;border:1px solid var(--line);border-radius:0.625rem;background:var(--field);color:var(--ink);font:inherit;font-size:1rem}
+textarea{resize:vertical;line-height:1.7}
+label.l{display:block;margin:0.875rem 0 0.25rem;font-weight:700;font-size:0.875rem}
+.hint{margin:0.25rem 0 0;color:var(--muted);font-size:0.8125rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:0.875rem;padding:0.375rem 0.875rem 1rem;margin-bottom:0.875rem}
+.card h2{margin:0.75rem 0 0;font-size:0.9375rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0.625rem 0.75rem}
+.grid label.l{margin-top:0.625rem}
+.row{display:flex;gap:0.5rem;align-items:center}
+.row > *{flex:1}
+.row > button{flex:none}
+.check{display:flex;align-items:flex-start;gap:0.625rem;margin:0.75rem 0 0}
+.check input{margin-top:0.25rem;width:1.125rem;height:1.125rem;flex:none}
+.btn{min-height:2.625rem;padding:0 0.875rem;border:1px solid var(--line);border-radius:0.625rem;background:var(--field);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.danger{border-color:var(--danger);color:var(--danger)}
+.btnwrap{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem}
+#testOut{margin:0.625rem 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:0.875rem}
+details summary{cursor:pointer;font-weight:700;padding:0.625rem 0}
+details p{margin:0 0 0.5rem}
+dialog{width:min(45rem,94vw);max-height:86dvh;border:1px solid var(--line);border-radius:0.875rem;background:var(--panel);color:var(--ink);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog .dh{display:flex;align-items:center;justify-content:space-between;padding:0.625rem 0.875rem;border-bottom:1px solid var(--line);font-weight:700}
+dialog pre{margin:0;padding:0.75rem 0.875rem;max-height:68dvh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:0.8125rem/1.6 ui-monospace,Menlo,Consolas,monospace}
+
+/* 会話 */
+#chatList{flex:1;min-height:0;overflow:auto;padding:0.875rem 0.875rem 0.5rem;padding-left:max(0.875rem,env(safe-area-inset-left));padding-right:max(0.875rem,env(safe-area-inset-right));display:flex;flex-direction:column;gap:1rem;background:var(--field);-webkit-overflow-scrolling:touch}
+.m{display:flex;flex-direction:column;min-width:0}
+.m.user{align-items:flex-end}
+.m .bubble{white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--story-font);font-size:var(--story-size);line-height:1.85}
+.m.user .bubble{max-width:88%;padding:0.5rem 0.75rem;border-radius:1rem 1rem 0.25rem 1rem;background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
+.m .bubble.wait{color:var(--muted)}
+.mact{display:flex;flex-wrap:wrap;gap:0.125rem;margin-top:0.125rem}
+.mini{min-height:1.875rem;padding:0 0.5rem;border:0;border-radius:0.5rem;background:transparent;color:var(--muted);font-size:0.8125rem;cursor:pointer;white-space:nowrap}
+.mini.armed{color:var(--danger);font-weight:700}
+.medit{width:100%;display:flex;flex-direction:column;gap:0.375rem}
+.medit textarea{min-height:5rem}
+.medit .mact{margin-top:0}
+.empty{margin:auto;max-width:28rem;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:0.75rem;align-items:center;padding:1rem 0}
+.empty p{margin:0}
+.empty .chips{flex-wrap:wrap;justify-content:center;overflow:visible}
+.composer{flex:none;display:flex;gap:0.5rem;align-items:flex-end;padding:0.5rem 0.75rem;padding-bottom:max(0.5rem,env(safe-area-inset-bottom));padding-left:max(0.75rem,env(safe-area-inset-left));padding-right:max(0.75rem,env(safe-area-inset-right));background:var(--panel);border-top:1px solid var(--line)}
+#chatInput{flex:1;resize:none;min-height:2.75rem;max-height:30vh;line-height:1.5;overflow-y:auto}
+#chatSend{flex:none;width:2.75rem;height:2.75rem;border:0;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:1.125rem;cursor:pointer}
+#chatSend.stop{background:var(--danger)}
+.toolbar .title{min-width:0;flex:1;margin-left:0.5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-row{display:flex;gap:0.5rem;align-items:center;padding:0.375rem 0.875rem;border-bottom:1px solid var(--line)}
+.hist-row .pick{flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:0.375rem 0;cursor:pointer}
+.hist-row .pick b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-row.cur .pick b{color:var(--accent)}
+#histList{max-height:68dvh;overflow:auto}
+@media (max-width:420px){ h1{font-size:0.9375rem} .tab{padding:0 0.6875rem} .grid{grid-template-columns:1fr 1fr} }
+@media (prefers-reduced-motion:no-preference){ .btnrow button,.tab{transition:background .15s,border-color .15s} }
+</style>
+</head>
+<body>
+<noscript>このツールはJavaScriptが必要です。</noscript>
+
+<header>
+  <h1>物語エディタ</h1>
+  <nav role="tablist" aria-label="画面の切り替え">
+    <button class="tab" role="tab" id="tab-story" aria-selected="true" aria-controls="panel-story" data-tab="story">本文</button>
+    <button class="tab" role="tab" id="tab-chat" aria-selected="false" aria-controls="panel-chat" data-tab="chat">会話</button>
+    <button class="tab" role="tab" id="tab-notes" aria-selected="false" aria-controls="panel-notes" data-tab="notes">メモ</button>
+    <button class="tab" role="tab" id="tab-settings" aria-selected="false" aria-controls="panel-settings" data-tab="settings">設定</button>
+  </nav>
+</header>
+<div id="msg" hidden role="status" aria-live="polite"><span id="msgText"></span><button id="msgClose" aria-label="閉じる">×</button></div>
+
+<main>
+  <!-- 本文 -->
+  <section class="panel active" id="panel-story" role="tabpanel" aria-labelledby="tab-story">
+    <div class="toolbar">
+      <button class="ghost" id="fontDown" aria-label="文字を小さく">A−</button>
+      <button class="ghost" id="fontUp" aria-label="文字を大きく">A＋</button>
+      <button class="ghost" id="copyBtn">コピー</button>
+      <button class="ghost" id="saveTxt">保存(.txt)</button>
+      <span class="muted" id="count"></span>
+    </div>
+    <textarea id="f-story" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="ここに物語の書き出しを書いてください。&#10;「続きを書く」を押すと、AIが続きを書きます。&#10;設定や文体の指示は「メモ」タブに入れておくと、毎回自動で添えられます。"></textarea>
+    <div class="actions">
+      <div class="modebar" role="radiogroup" aria-label="書き方">
+        <label><input type="radio" name="mode" value="complete">続き書き</label>
+        <label><input type="radio" name="mode" value="chat">指示で書く</label>
+      </div>
+      <div id="instrBox" hidden>
+        <textarea id="f-instruction" rows="2" placeholder="AIへの指示(例:次の場面を、会話を中心に書いて)"></textarea>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="btnrow">
+        <button class="primary" id="genBtn">▶ 続きを書く</button>
+        <button class="danger" id="stopBtn" hidden>■ 停止</button>
+        <button id="undoBtn" title="直前の生成の前に戻す">↶ 取消</button>
+        <button id="regenBtn" title="直前の生成をやり直す">↻ 再生成</button>
+        <button id="previewBtn" title="AIに送る内容を確認する">送信内容</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 会話 -->
+  <section class="panel" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
+    <div class="toolbar">
+      <button class="ghost" id="histBtn" type="button">履歴</button>
+      <button class="ghost" id="newChatBtn" type="button">＋ 新規</button>
+      <button class="ghost" id="chatPreviewBtn" type="button">送信内容</button>
+      <span class="muted title" id="chatTitle"></span>
+    </div>
+    <div id="chatList" aria-live="polite"></div>
+    <div class="composer">
+      <textarea id="chatInput" rows="1" placeholder="メッセージを入力(送信は ▶ ボタン)" spellcheck="false"></textarea>
+      <button id="chatSend" type="button" aria-label="送信">▶</button>
+    </div>
+  </section>
+
+  <!-- メモ -->
+  <section class="panel" id="panel-notes" role="tabpanel" aria-labelledby="tab-notes">
+    <div class="pad">
+      <label class="l" for="f-memory" style="margin-top:0">設定メモ(毎回、本文の前に入ります)</label>
+      <textarea id="f-memory" rows="9" placeholder="例:&#10;【世界観】現代の港町。&#10;【登場人物】○○(28歳・書店員・内気)、△△(31歳・画家・飄々としている)&#10;【文体】三人称、過去形。会話は「」。落ち着いた描写で、比喩は控えめに。"></textarea>
+      <p class="hint">登場人物は、年齢と性格を具体的に書くとブレにくくなります。</p>
+
+      <label class="l" for="f-authorNote">作者メモ(本文の末尾近くに入ります)</label>
+      <textarea id="f-authorNote" rows="4" placeholder="例:今の場面は、二人が初めて夜の海辺で話す場面。ゆっくりとしたテンポで、視線や仕草を丁寧に描く。"></textarea>
+      <p class="hint">「いまの場面の方向性」や「文体の念押し」に向いています。空なら入りません。</p>
+
+      <label class="l" for="f-chatSys">会話のシステム指示(「会話」タブで使います)</label>
+      <textarea id="f-chatSys" rows="4" placeholder="空欄なら、標準の指示(小説づくりのパートナーとして、相談に乗り、頼まれたら本文を書く)が入ります。&#10;役になりきってほしいときは、ここに役の設定を書いてください。"></textarea>
+      <p class="hint">「設定メモ」は、会話でも自動で添えられます。</p>
+
+      <label class="l" for="f-sysPrompt">システム指示(「指示で書く」のときだけ使います)</label>
+      <textarea id="f-sysPrompt" rows="4" placeholder="空欄なら、標準の指示(プロの小説家として本文だけを書く)が入ります。"></textarea>
+    </div>
+  </section>
+
+  <!-- 設定 -->
+  <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
+    <div class="pad">
+      <div class="card">
+        <h2>接続</h2>
+        <label class="l" for="f-baseUrl">API URL</label>
+        <input type="url" id="f-baseUrl" inputmode="url" autocomplete="off" spellcheck="false">
+        <label class="l" for="f-apiKey">APIキー</label>
+        <div class="row">
+          <input type="password" id="f-apiKey" autocomplete="off" spellcheck="false" placeholder="rc_…など">
+          <button class="btn" id="keyToggle" type="button">表示</button>
+        </div>
+        <label class="check"><input type="checkbox" id="f-saveKey"><span>キーをこのブラウザに保存する<br><span class="hint">キーはFeatherlessへの送信にだけ使われます。共用の端末では、オフにしてください。</span></span></label>
+        <label class="l" for="f-model">モデルID</label>
+        <input type="text" id="f-model" list="modelList" autocomplete="off" spellcheck="false" autocapitalize="off">
+        <datalist id="modelList">
+          <option value="TheDrummer/Orion-26B-A4B-v1.1"></option>
+          <option value="Naphula/Goetia-26B-A4B-v1.7"></option>
+          <option value="TrevorJS/gemma-4-26B-A4B-it-uncensored"></option>
+          <option value="TheDrummer/Artemis-31B-v1.2"></option>
+          <option value="llmfan46/gemma-4-31B-it-uncensored-heretic"></option>
+          <option value="Ateron/Gemma-4-Writers-31B-V2"></option>
+          <option value="huihui-ai/Huihui-Mistral-Small-3.2-24B-Instruct-2506-abliterated"></option>
+          <option value="huihui-ai/Huihui-Qwen3.5-27B-abliterated"></option>
+        </datalist>
+        <p class="hint">リストにないモデルも、HuggingFaceと同じ名前で手入力できます。</p>
+        <div class="btnwrap"><button class="btn primary" id="testBtn" type="button">接続テスト</button></div>
+        <p id="testOut" role="status"></p>
+      </div>
+
+      <div class="card">
+        <h2>生成</h2>
+        <div class="grid">
+          <div><label class="l" for="f-maxTokens">最大出力(トークン)</label><input type="number" id="f-maxTokens" min="1" max="8000" step="1" inputmode="numeric"></div>
+          <div><label class="l" for="f-ctxChars">文脈に使う本文(文字数)</label><input type="number" id="f-ctxChars" min="500" max="60000" step="500" inputmode="numeric"></div>
+          <div><label class="l" for="f-temperature">Temperature</label><input type="number" id="f-temperature" min="0" max="2" step="0.05" inputmode="decimal"></div>
+          <div><label class="l" for="f-topP">Top-P</label><input type="number" id="f-topP" min="0.01" max="1" step="0.01" inputmode="decimal"></div>
+          <div><label class="l" for="f-topK">Top-K(-1で無効)</label><input type="number" id="f-topK" min="-1" max="500" step="1" inputmode="numeric"></div>
+          <div><label class="l" for="f-minP">Min-P(空で送らない)</label><input type="number" id="f-minP" min="0" max="1" step="0.01" inputmode="decimal"></div>
+          <div><label class="l" for="f-repPen">繰り返しペナルティ</label><input type="number" id="f-repPen" min="0.8" max="2" step="0.01" inputmode="decimal"></div>
+          <div><label class="l" for="f-noteDepth">作者メモの位置(末尾から)</label><input type="number" id="f-noteDepth" min="0" max="5000" step="50" inputmode="numeric"></div>
+          <div><label class="l" for="f-chatMaxTokens">会話の最大出力(トークン)</label><input type="number" id="f-chatMaxTokens" min="1" max="8000" step="50" inputmode="numeric"></div>
+        </div>
+        <p class="hint">Featherlessの文脈は32Kトークンです。日本語は1文字がおよそ1トークンなので、「文脈に使う本文」+メモ+最大出力が3万を超えないようにしてください。長くなった分は、古い部分から自動で省かれます。</p>
+        <label class="l" for="f-stops">停止する文字列(1行に1つ。空でも可)</label>
+        <textarea id="f-stops" rows="2" spellcheck="false" placeholder="例:&#10;＜＜＜"></textarea>
+        <label class="check"><input type="checkbox" id="f-chatUseStory"><span>「会話」でも、いまの本文を参考として添える(本文の後ろ半分まで)</span></label>
+        <label class="check"><input type="checkbox" id="f-stream"><span>ストリーミング(生成中の文字を順に表示する)</span></label>
+        <label class="check"><input type="checkbox" id="f-loopGuard"><span>同じ文章の繰り返しを検知したら、自動で止める</span></label>
+        <label class="check"><input type="checkbox" id="f-stripThought"><span>Gemma 4に混ざる「thought」の目印を、本文から取り除く</span></label>
+        <label class="check"><input type="checkbox" id="f-thinkOff"><span>「指示で書く」のとき、思考(thinking)をオフにする指定を送る</span></label>
+      </div>
+
+      <div class="card">
+        <h2>表示とデータ</h2>
+        <div class="grid">
+          <div><label class="l" for="f-fontSize">本文の文字サイズ(px)</label><input type="number" id="f-fontSize" min="10" max="32" step="1" inputmode="numeric"></div>
+          <div><label class="l" for="f-uiScale">画面全体の大きさ(%)</label><input type="number" id="f-uiScale" min="50" max="150" step="5" inputmode="numeric"></div>
+          <div><label class="l" for="f-fontFace">本文の書体</label>
+            <select id="f-fontFace"><option value="serif">明朝</option><option value="sans">ゴシック</option></select></div>
+        </div>
+        <div class="btnwrap">
+          <button class="btn" id="exportJson" type="button">バックアップ(.json)</button>
+          <label class="btn" style="display:inline-flex;align-items:center;cursor:pointer">読み込み<input type="file" id="importFile" accept=".txt,.json,text/plain,application/json" hidden></label>
+          <button class="btn" id="forgetKey" type="button">保存したキーを消す</button>
+          <button class="btn danger" id="clearBtn" type="button">本文を消去</button>
+        </div>
+        <p class="hint" id="storeNote"></p>
+      </div>
+
+      <details class="card">
+        <summary>使い方</summary>
+        <p><b>会話</b>:相談したり、場面のアイデアを出させたり、本文を書かせたりできます。返事の「本文へ」を押すと、本文の末尾に追加されます。</p>
+        <p><b>続き書き</b>:本文の続きを、AIがそのまま書きます。書き出しを数行入れてから押してください。</p>
+        <p><b>指示で書く</b>:「次の場面を書いて」などの指示に従って、本文の末尾に追記します。</p>
+        <p><b>取消・再生成</b>:直前の生成の前に戻す、またはやり直します。</p>
+        <p><b>送信内容</b>:AIに実際に送る文章を確認できます。うまく書けないときの確認用です。</p>
+        <p>本文と設定は、このブラウザの中にだけ保存されます。ブラウザのデータを消すと失われるので、時々「保存(.txt)」で書き出してください。</p>
+      </details>
+    </div>
+  </section>
+</main>
+
+<dialog id="histDlg">
+  <div class="dh"><span>会話の履歴</span><button class="ghost" id="histClose" type="button">閉じる</button></div>
+  <div id="histList"></div>
+</dialog>
+
+<dialog id="previewDlg">
+  <div class="dh"><span>AIに送る内容</span><button class="ghost" id="previewClose" type="button">閉じる</button></div>
+  <pre id="previewBody"></pre>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+const DEFAULT_SYS = 'あなたはプロの小説家です。与えられた設定とこれまでの物語に沿って、物語の続きを書いてください。地の文と会話文を自然な日本語で書き、前置き・解説・見出しは付けず、本文だけを出力してください。';
+const CHIPS = [
+  '続きを書いてください。',
+  '情景描写を増やして、続きを書いてください。',
+  '会話を中心に、続きを書いてください。',
+  '登場人物の感情の動きを丁寧に描いて、続きを書いてください。',
+  '場面を転換して、続きを書いてください。'
+];
+const DEFAULTS = {
+  baseUrl: 'https://api.featherless.ai/v1', apiKey: '', saveKey: true,
+  model: 'TheDrummer/Orion-26B-A4B-v1.1',
+  maxTokens: 400, ctxChars: 14000, temperature: 0.9, topP: 0.95, topK: 64, minP: '', repPen: 1.05,
+  noteDepth: 400, stops: '', stream: true, loopGuard: true, stripThought: true, thinkOff: true,
+  mode: 'complete', fontSize: 17, uiScale: 90, fontFace: 'serif',
+  memory: '', authorNote: '', sysPrompt: '', instruction: '', story: '',
+  chatSys: '', chatMaxTokens: 1200, chatUseStory: true, chatDraft: '', chats: [], chatId: ''
+};
+const FIELDS = {
+  baseUrl: 'text', apiKey: 'text', saveKey: 'check', model: 'text',
+  maxTokens: 'num', ctxChars: 'num', temperature: 'num', topP: 'num', topK: 'num', minP: 'num', repPen: 'num', noteDepth: 'num',
+  stops: 'text', stream: 'check', loopGuard: 'check', stripThought: 'check', thinkOff: 'check',
+  fontSize: 'num', uiScale: 'num', fontFace: 'text', memory: 'text', authorNote: 'text', sysPrompt: 'text', instruction: 'text', story: 'text',
+  chatSys: 'text', chatMaxTokens: 'num', chatUseStory: 'check'
+};
+const STORE_KEY = 'monogatari-editor.v1';
+
+let S = { ...DEFAULTS };
+let storageOK = true;
+let undoStack = [];
+let busy = false;
+let ctrl = null;
+
+/* ---------- 保存 ---------- */
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) Object.assign(S, JSON.parse(raw));
+  } catch (e) { storageOK = false; }
+}
+function save() {
+  try {
+    const copy = { ...S };
+    if (!S.saveKey) copy.apiKey = '';
+    localStorage.setItem(STORE_KEY, JSON.stringify(copy));
+  } catch (e) { storageOK = false; updateStoreNote(); }
+}
+let saveTimer = 0;
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+function updateStoreNote() {
+  $('#storeNote').textContent = storageOK ? '' : 'このブラウザでは保存できません。こまめに「保存(.txt)」で書き出してください。';
+}
+
+/* ---------- 画面 ---------- */
+function setTab(name) {
+  $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+  if (name === 'chat') requestAnimationFrame(() => { const b = $('#chatList'); if (b) b.scrollTop = b.scrollHeight; });
+}
+function showMsg(text, kind = 'error') {
+  const box = $('#msg');
+  box.className = kind;
+  $('#msgText').textContent = text;
+  box.hidden = false;
+}
+function hideMsg() { $('#msg').hidden = true; }
+
+function applyFont() {
+  const pct = Math.min(150, Math.max(50, Number(S.uiScale) || 90));
+  document.documentElement.style.setProperty('--ui-scale', String(pct / 100));
+  document.documentElement.style.setProperty('--story-size', (Number(S.fontSize) || 17) + 'px');
+  document.documentElement.style.setProperty('--story-font',
+    S.fontFace === 'sans'
+      ? 'system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif'
+      : '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP","Songti SC",serif');
+}
+function updateCount() {
+  const n = S.story.length;
+  $('#count').textContent = n.toLocaleString('ja-JP') + '文字';
+}
+function setStory(text, follow) {
+  S.story = text;
+  const el = $('#f-story');
+  el.value = text;
+  if (follow) { el.scrollTop = el.scrollHeight; }
+  updateCount();
+  scheduleSave();
+}
+function updateUI() {
+  const chat = S.mode === 'chat';
+  $('#instrBox').hidden = !chat;
+  $('#genBtn').textContent = chat ? '▶ 指示で書く' : '▶ 続きを書く';
+  $('#genBtn').hidden = busy;
+  $('#stopBtn').hidden = !busy;
+  $('#undoBtn').disabled = busy || undoStack.length === 0;
+  $('#regenBtn').disabled = busy || undoStack.length === 0;
+  $('#previewBtn').disabled = busy;
+  $('#f-story').readOnly = busy;
+  $$('input[name=mode]').forEach(r => { r.checked = r.value === S.mode; r.disabled = busy; });
+}
+function pushUndo(text) {
+  undoStack.push(text);
+  if (undoStack.length > 30) undoStack.shift();
+}
+
+/* ---------- 入力欄の連動 ---------- */
+function bindFields() {
+  for (const [key, type] of Object.entries(FIELDS)) {
+    const el = $('#f-' + key);
+    if (!el) continue;
+    if (type === 'check') el.checked = !!S[key];
+    else el.value = S[key] ?? '';
+    const handler = () => {
+      if (type === 'check') S[key] = el.checked;
+      else if (type === 'num') S[key] = el.value === '' ? '' : Number(el.value);
+      else S[key] = el.value;
+      if (key === 'story') updateCount();
+      if (key === 'fontSize' || key === 'fontFace' || key === 'uiScale') applyFont();
+      scheduleSave();
+    };
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  }
+  $$('input[name=mode]').forEach(r => r.addEventListener('change', () => {
+    if (r.checked) { S.mode = r.value; updateUI(); scheduleSave(); }
+  }));
+}
+
+/* ---------- 送信内容の組み立て ---------- */
+function trimStory(story, max) {
+  max = Number(max) || 14000;
+  if (story.length <= max) return story;
+  let s = story.slice(story.length - max);
+  const m = s.slice(0, 300).search(/[\n。！？!?」』]/);
+  if (m >= 0) s = s.slice(m + 1).replace(/^\n+/, '');
+  return s;
+}
+function withNote(story, note, depth) {
+  note = (note || '').trim();
+  if (!note) return story;
+  const pos = Math.max(0, story.length - Math.max(0, Number(depth) || 0));
+  const seg = story.slice(0, pos);
+  const cut = Math.max(seg.lastIndexOf('\n'), seg.lastIndexOf('。'), seg.lastIndexOf('」'), seg.lastIndexOf('！'), seg.lastIndexOf('？')) + 1;
+  const head = story.slice(0, cut);
+  const tail = story.slice(cut).replace(/^\n+/, '');
+  const gap = head && !/\n$/.test(head) ? '\n\n' : (head ? '\n' : '');
+  return head + gap + '[作者メモ: ' + note + ']\n\n' + tail;
+}
+function samplerParams() {
+  const p = {};
+  const n = v => (v === '' || v == null || !Number.isFinite(Number(v))) ? null : Number(v);
+  if (n(S.temperature) !== null) p.temperature = n(S.temperature);
+  if (n(S.topP) !== null) p.top_p = n(S.topP);
+  if (n(S.topK) !== null) p.top_k = Math.trunc(n(S.topK));
+  if (n(S.minP) !== null) p.min_p = n(S.minP);
+  if (n(S.repPen) !== null) p.repetition_penalty = n(S.repPen);
+  const stops = String(S.stops || '').split('\n').map(s => s.trim()).filter(Boolean);
+  if (stops.length) p.stop = stops;
+  return p;
+}
+function baseUrl() {
+  let b = String(S.baseUrl || '').trim().replace(/\/+$/, '');
+  if (b && !/\/v\d+$/.test(b)) b += '/v1';
+  return b;
+}
+function buildRequest() {
+  const mem = S.memory.trim();
+  const story = withNote(trimStory(S.story, S.ctxChars), S.mode === 'chat' ? '' : S.authorNote, S.noteDepth);
+  const maxTokens = Math.max(1, Math.trunc(Number(S.maxTokens) || 400));
+  const common = { model: S.model.trim(), stream: !!S.stream, max_tokens: maxTokens, ...samplerParams() };
+
+  if (S.mode === 'chat') {
+    const an = S.authorNote.trim();
+    const sys = [
+      S.sysPrompt.trim() || DEFAULT_SYS,
+      mem && '【設定】\n' + mem,
+      an && '【今回の方針】\n' + an,
+      trimStory(S.story, S.ctxChars) && '【これまでの物語】\n' + trimStory(S.story, S.ctxChars)
+    ].filter(Boolean).join('\n\n');
+    const body = {
+      ...common,
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: S.instruction.trim() || '続きを書いてください。' }
+      ]
+    };
+    if (S.thinkOff) body.chat_template_kwargs = { enable_thinking: false };
+    return { url: baseUrl() + '/chat/completions', body };
+  }
+  const head = mem ? '【設定】\n' + mem + '\n\n【本文】\n' : '';
+  const prompt = head + story;
+  if (!prompt.trim()) throw new Error('本文の書き出しか、設定メモを入力してください。');
+  return { url: baseUrl() + '/completions', body: { ...common, prompt } };
+}
+function validate() {
+  if (!baseUrl()) return { msg: 'API URLを入力してください。', tab: 'settings' };
+  if (!S.apiKey.trim()) return { msg: '設定タブで、APIキーを入力してください。', tab: 'settings' };
+  if (!S.model.trim()) return { msg: '設定タブで、モデルIDを入力してください。', tab: 'settings' };
+  return null;
+}
+
+/* ---------- 出力の後処理 ---------- */
+function cleanOutput(raw) {
+  let t = raw.replace(/<\|channel>(?:thought)?|<channel\|>/g, '');
+  if (S.stripThought) {
+    t = t.replace(/^\s*thought(?:[ \t]*\n|\s*$)/i, '');
+    t = t.replace(/(^|[。！？」』）\n])[ \t]*thought[ \t]*(?=\n|$)/gi, '$1');
+  }
+  return t;
+}
+function looping(text) {
+  if (text.length < 120) return false;
+  const tail = text.slice(-24);
+  const win = text.slice(-600);
+  let c = 0, i = -1;
+  while ((i = win.indexOf(tail, i + 1)) !== -1) { if (++c >= 4) return true; }
+  return false;
+}
+
+/* ---------- 通信 ---------- */
+class ApiError extends Error {
+  constructor(status, body) { super('HTTP ' + status); this.status = status; this.body = body || ''; }
+}
+function explainError(e) {
+  if (e instanceof ApiError) {
+    let detail = '';
+    try {
+      const j = JSON.parse(e.body);
+      detail = (j.error && (j.error.message || j.error)) || j.message || j.detail || '';
+      if (typeof detail !== 'string') detail = JSON.stringify(detail);
+    } catch (_) { detail = String(e.body || '').slice(0, 300); }
+    let hint = '';
+    if (e.status === 401) hint = 'APIキーが正しくありません。コピーし直してください。';
+    else if (e.status === 403) hint = '権限がありません。プランやモデルの対応を確認してください。';
+    else if (e.status === 404) hint = 'モデルIDかURLが違う可能性があります。';
+    else if (e.status === 429) hint = '同時接続の上限です。少し待ってから、もう一度押してください(26B級のモデルは枠を2つ使います)。';
+    else if (e.status >= 500) hint = 'サービス側の不調かもしれません。少し待って再試行してください。';
+    if (/context|maximum.*length|too long|token/i.test(detail) && e.status === 400) hint = '文脈が長すぎます。設定の「文脈に使う本文」か「最大出力」を減らしてください。';
+    return 'エラー ' + e.status + (hint ? '\n' + hint : '') + (detail ? '\n詳細: ' + detail : '');
+  }
+  const emsg = String((e && e.message) || '');
+  if (e instanceof TypeError || (e && e.name === 'TypeError') || /load failed|failed to fetch|networkerror|network request failed/i.test(emsg)) {
+    return '接続できませんでした(' + emsg + ')。\n・チャットアプリ内のプレビューで開いていると、外への通信が止められます。ファイルを「ファイル」アプリなどに保存し、Safari/Chromeで開き直してください。\n・ネットワークとAPI URL(https://api.featherless.ai/v1)を確認してください。\n・それでも出る場合は、ブラウザの制限(CORS)の可能性があります。PCのChromeでも試してください。';
+  }
+  return String((e && e.message) || e);
+}
+async function callApi(url, body, onText, signal) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + S.apiKey.trim() },
+    body: JSON.stringify(body),
+    signal
+  });
+  if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+  let finish = null;
+  const pick = j => {
+    const c = j.choices && j.choices[0];
+    if (!c) return '';
+    if (c.finish_reason) finish = c.finish_reason;
+    if (c.delta && typeof c.delta.content === 'string') return c.delta.content;
+    if (typeof c.text === 'string') return c.text;
+    if (c.message && typeof c.message.content === 'string') return c.message.content;
+    return '';
+  };
+  const ct = res.headers.get('content-type') || '';
+  if (!body.stream || !/event-stream/i.test(ct)) {
+    const j = await res.json();
+    if (j.error) throw new ApiError(res.status, JSON.stringify(j));
+    onText(pick(j));
+    return finish;
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder('utf-8');
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).replace(/\r$/, '');
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+      if (payload === '[DONE]') return finish;
+      let j;
+      try { j = JSON.parse(payload); } catch (_) { continue; }
+      if (j.error) throw new ApiError(res.status, JSON.stringify(j));
+      const piece = pick(j);
+      if (piece) onText(piece);
+    }
+  }
+  return finish;
+}
+
+/* ---------- 生成 ---------- */
+async function generate(regen) {
+  if (busy) return;
+  hideMsg();
+  const bad = validate();
+  if (bad) { showMsg(bad.msg, 'error'); if (bad.tab) setTab(bad.tab); updateUI(); return; }
+  let revertedFrom = null, poppedPrev = null;
+  if (regen) {
+    if (!undoStack.length) { showMsg('やり直せる履歴がありません。先に「書く」を押してください。', 'warn'); return; }
+    revertedFrom = S.story;
+    poppedPrev = undoStack.pop();
+    setStory(poppedPrev);
+  }
+  // 再生成の途中で失敗したときに、直前の本文へ戻す
+  const rollback = () => {
+    if (regen && revertedFrom !== null) { setStory(revertedFrom); undoStack.push(poppedPrev); }
+  };
+  let req;
+  try { req = buildRequest(); } catch (e) { rollback(); showMsg(e.message, 'error'); updateUI(); return; }
+
+  const before = S.story;
+  pushUndo(before);
+  const sep = (S.mode === 'chat' && before)
+    ? (/\n\n$/.test(before) ? '' : (/\n$/.test(before) ? '\n' : '\n\n')) : '';
+  let raw = '', shown = '', failed = false, loopHit = false, finish = null;
+  busy = true;
+  ctrl = new AbortController();
+  updateUI();
+  const t0 = performance.now();
+  try {
+    finish = await callApi(req.url, req.body, piece => {
+      raw += piece;
+      shown = cleanOutput(raw);
+      setStory(before + sep + shown, true);
+      if (S.loopGuard && looping(shown)) { loopHit = true; ctrl.abort(); }
+    }, ctrl.signal);
+  } catch (e) {
+    if (!(e && e.name === 'AbortError')) {
+      failed = true;
+      if (!shown) { undoStack.pop(); rollback(); }
+      showMsg(explainError(e), 'error');
+    }
+  } finally {
+    busy = false;
+    ctrl = null;
+  }
+  if (loopHit) {
+    const tail = shown.slice(-24);
+    const first = shown.indexOf(tail);
+    if (first >= 0) shown = shown.slice(0, first + tail.length);
+    setStory(before + sep + shown, true);
+    showMsg('同じ文章の繰り返しを検知して、止めました(繰り返し部分は削りました)。\nTemperatureか繰り返しペナルティを少し上げるか、「指示で書く」を試してください。', 'warn');
+  } else if (!failed && !shown.trim()) {
+    undoStack.pop();
+    setStory(before);
+    rollback();
+    showMsg('モデルから空の返答が返りました。\n・最大出力を増やす\n・「送信内容」で、AIに送る内容を確認する\n・別のモデルを試す\nのどれかをお試しください。', 'warn');
+  } else if (!failed) {
+    const secs = ((performance.now() - t0) / 1000).toFixed(1);
+    showMsg(shown.length + '文字を追記しました(' + secs + '秒)' + (finish === 'length' ? '。最大出力に達したので、途中で切れている可能性があります。' : ''), 'ok');
+  }
+  updateUI();
+  save();
+}
+function stop() { if (ctrl) ctrl.abort(); }
+function undo() {
+  if (busy || !undoStack.length) return;
+  setStory(undoStack.pop());
+  hideMsg();
+  updateUI();
+}
+
+/* ---------- 送信内容の確認 ---------- */
+function previewText() {
+  let req;
+  try { req = buildRequest(); } catch (e) { return e.message; }
+  return formatReq(req);
+}
+function formatReq(req) {
+  const b = { ...req.body };
+  let out = 'POST ' + req.url + '\n\n';
+  if (b.messages) {
+    b.messages.forEach(m => { out += '── ' + m.role + ' ──\n' + m.content + '\n\n'; });
+    delete b.messages;
+  } else {
+    out += '── prompt ──\n' + b.prompt + '\n\n';
+    delete b.prompt;
+  }
+  out += '── パラメータ ──\n' + JSON.stringify(b, null, 2);
+  return out;
+}
+
+/* ---------- 接続テスト ---------- */
+async function testConnection() {
+  const out = $('#testOut');
+  out.style.color = '';
+  const bad = validate();
+  if (bad) { out.textContent = bad.msg; out.style.color = 'var(--danger)'; return; }
+  out.textContent = '接続中…';
+  const t0 = performance.now();
+  try {
+    let text = '';
+    await callApi(baseUrl() + '/completions',
+      { model: S.model.trim(), prompt: 'こんにちは。', max_tokens: 8, stream: false },
+      p => { text += p; }, undefined);
+    out.textContent = '接続OKです(' + ((performance.now() - t0) / 1000).toFixed(1) + '秒)\n接続先: ' + baseUrl() + '\n返答の例: ' + (cleanOutput(text).trim() || '(空)');
+    out.style.color = 'var(--ok)';
+  } catch (e) {
+    out.textContent = explainError(e);
+    out.style.color = 'var(--danger)';
+  }
+}
+
+/* ---------- 会話 ---------- */
+const DEFAULT_CHAT_SYS = 'あなたは、ユーザーと一緒に小説を作る、創作のパートナーです。ユーザーの相談には自然な日本語で答え、頼まれたときは小説の本文も書いてください。本文を書くときは、前置きや解説を付けず、物語だけを書いてください。';
+const CHAT_STARTERS = [
+  'この設定で、物語の導入を書いてください。',
+  '次の場面のアイデアを3つ出してください。',
+  'いまの本文を読んで、続きの展開を一緒に考えたいです。'
+];
+let chatBusy = false, chatCtrl = null, chatStick = true, chatEditing = -1;
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function curChat() { return S.chats.find(c => c.id === S.chatId) || null; }
+function makeChat() {
+  const c = { id: uid(), title: '新しい会話', messages: [], updated: Date.now() };
+  S.chats.unshift(c);
+  if (S.chats.length > 50) S.chats.length = 50;
+  S.chatId = c.id;
+  return c;
+}
+function ensureChat() { return curChat() || makeChat(); }
+function newChat() {
+  if (chatBusy) return;
+  const c = curChat();
+  if (!(c && c.messages.length === 0)) makeChat();
+  chatEditing = -1; chatStick = true;
+  renderChat(); scheduleSave();
+  $('#chatInput').focus();
+}
+function chatHistory(c) {
+  const budget = Math.max(500, Number(S.ctxChars) || 14000);
+  const src = c.messages.filter(m => m.content.trim());
+  let total = 0, start = src.length;
+  for (let i = src.length - 1; i >= 0; i--) {
+    total += src[i].content.length;
+    if (total > budget && start < src.length) break;
+    start = i;
+  }
+  const out = src.slice(start).map(m => ({ role: m.role, content: m.content }));
+  while (out.length && out[0].role !== 'user') out.shift();
+  const merged = [];
+  for (const m of out) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) last.content += '\n\n' + m.content; else merged.push({ ...m });
+  }
+  return merged;
+}
+function buildChatRequest(c) {
+  const mem = S.memory.trim();
+  const story = S.chatUseStory ? trimStory(S.story, Math.floor((Number(S.ctxChars) || 14000) / 2)).trim() : '';
+  const sys = [
+    S.chatSys.trim() || DEFAULT_CHAT_SYS,
+    mem && '【設定】\n' + mem,
+    story && '【現在の本文(参考)】\n' + story
+  ].filter(Boolean).join('\n\n');
+  const hist = chatHistory(c);
+  if (!hist.length || hist[hist.length - 1].role !== 'user') throw new Error('送るメッセージがありません。');
+  const body = {
+    model: S.model.trim(), stream: !!S.stream,
+    max_tokens: Math.max(1, Math.trunc(Number(S.chatMaxTokens) || 1200)),
+    ...samplerParams(),
+    messages: [{ role: 'system', content: sys }, ...hist]
+  };
+  if (S.thinkOff) body.chat_template_kwargs = { enable_thinking: false };
+  return { url: baseUrl() + '/chat/completions', body };
+}
+function autoGrow() {
+  const ta = $('#chatInput');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight + 2, Math.round(window.innerHeight * 0.3)) + 'px';
+}
+function updateChatUI() {
+  const b = $('#chatSend');
+  b.textContent = chatBusy ? '■' : '▶';
+  b.classList.toggle('stop', chatBusy);
+  b.setAttribute('aria-label', chatBusy ? '停止' : '送信');
+  $('#newChatBtn').disabled = chatBusy;
+  $('#histBtn').disabled = chatBusy;
+}
+function arm(btn, label, fn) {
+  let armed = false, t = 0;
+  const orig = btn.textContent;
+  btn.addEventListener('click', () => {
+    if (!armed) {
+      armed = true; btn.textContent = 'もう一度押す'; btn.classList.add('armed');
+      t = setTimeout(() => { armed = false; btn.textContent = orig; btn.classList.remove('armed'); }, 3000);
+      return;
+    }
+    clearTimeout(t); fn();
+  });
+}
+function mini(label, fn) {
+  const b = el('button', 'mini', label); b.type = 'button';
+  if (fn) b.addEventListener('click', fn);
+  return b;
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); showMsg('コピーしました。', 'ok'); }
+  catch (_) {
+    const ta = el('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+    showMsg(ok ? 'コピーしました。' : 'コピーできませんでした。文章を長押しして、コピーしてください。', ok ? 'ok' : 'warn');
+  }
+}
+function chatToStory(m) {
+  const t = m.content.trim();
+  if (!t) return;
+  const before = S.story;
+  pushUndo(before);
+  const sep = before ? (/\n\n$/.test(before) ? '' : (/\n$/.test(before) ? '\n' : '\n\n')) : '';
+  setStory(before + sep + t, true);
+  updateUI();
+  showMsg('本文の末尾に追加しました。本文タブの「取消」で戻せます。', 'ok');
+}
+function msgEl(m, i, c) {
+  const wrap = el('div', 'm ' + m.role);
+  const last = i === c.messages.length - 1;
+  if (chatEditing === i && !chatBusy) {
+    const box = el('div', 'medit');
+    const ta = el('textarea'); ta.value = m.content; ta.id = 'chatEditBox';
+    box.appendChild(ta);
+    const act = el('div', 'mact');
+    const save = () => { const v = ta.value.trim(); if (v) m.content = v; chatEditing = -1; c.updated = Date.now(); renderChat(); scheduleSave(); };
+    act.appendChild(mini('保存', save));
+    if (m.role === 'user') act.appendChild(mini('保存してやり直す', () => {
+      const v = ta.value.trim(); if (!v) return;
+      m.content = v; chatEditing = -1; c.messages.length = i + 1; chatGenerate();
+    }));
+    act.appendChild(mini('キャンセル', () => { chatEditing = -1; renderChat(); }));
+    box.appendChild(act);
+    wrap.appendChild(box);
+    return wrap;
+  }
+  const b = el('div', 'bubble' + (!m.content ? ' wait' : ''), m.content || '…');
+  wrap.appendChild(b);
+  if (chatBusy && last && m.role === 'assistant') return wrap;
+  const act = el('div', 'mact');
+  if (m.role === 'assistant') {
+    act.appendChild(mini('コピー', () => copyText(m.content)));
+    act.appendChild(mini('本文へ', () => chatToStory(m)));
+    act.appendChild(mini('編集', () => { chatEditing = i; renderChat(); const t = $('#chatEditBox'); if (t) t.focus(); }));
+    if (last) act.appendChild(mini('再生成', () => chatRegen()));
+  } else {
+    act.appendChild(mini('編集', () => { chatEditing = i; renderChat(); const t = $('#chatEditBox'); if (t) t.focus(); }));
+    if (!chatBusy) act.appendChild(mini('ここからやり直す', () => { if (chatBusy) return; c.messages.length = i + 1; chatGenerate(); }));
+  }
+  const del = mini('削除');
+  arm(del, '削除', () => { c.messages.splice(i, 1); c.updated = Date.now(); renderChat(); scheduleSave(); });
+  act.appendChild(del);
+  wrap.appendChild(act);
+  return wrap;
+}
+function renderChat() {
+  const c = curChat();
+  const box = $('#chatList');
+  box.textContent = '';
+  $('#chatTitle').textContent = c ? c.title : '';
+  if (!c || !c.messages.length) {
+    const e = el('div', 'empty');
+    e.appendChild(el('p', null, '何から始めますか？'));
+    e.appendChild(el('p', 'hint', 'キャラの設定や世界観は「メモ」タブに書くと、会話にも自動で反映されます。'));
+    const chips = el('div', 'chips');
+    CHAT_STARTERS.forEach(t => {
+      const b = el('button', 'chip', t); b.type = 'button';
+      b.addEventListener('click', () => { const ta = $('#chatInput'); ta.value = t; S.chatDraft = t; autoGrow(); ta.focus(); });
+      chips.appendChild(b);
+    });
+    e.appendChild(chips);
+    box.appendChild(e);
+  } else {
+    c.messages.forEach((m, i) => box.appendChild(msgEl(m, i, c)));
+    if (chatStick) box.scrollTop = box.scrollHeight;
+  }
+  updateChatUI();
+}
+function setLastBubble(text) {
+  const bs = $$('#chatList .m .bubble');
+  const b = bs[bs.length - 1];
+  if (!b) return;
+  b.textContent = text || '…';
+  b.classList.toggle('wait', !text);
+  const box = $('#chatList');
+  if (chatStick) box.scrollTop = box.scrollHeight;
+}
+async function chatGenerate(restore) {
+  const c = curChat();
+  if (!c || chatBusy) return;
+  hideMsg();
+  const bad = validate();
+  if (bad) { showMsg(bad.msg, 'error'); if (bad.tab) setTab(bad.tab); renderChat(); return; }
+  let req;
+  try { req = buildChatRequest(c); } catch (e) { showMsg(e.message, 'error'); if (restore) c.messages.push(restore); renderChat(); return; }
+  const msg = { role: 'assistant', content: '' };
+  c.messages.push(msg);
+  chatBusy = true; chatCtrl = new AbortController(); chatStick = true;
+  renderChat();
+  let raw = '', shown = '', failed = false, loopHit = false, finish = null;
+  try {
+    finish = await callApi(req.url, req.body, piece => {
+      raw += piece;
+      shown = cleanOutput(raw);
+      msg.content = shown;
+      setLastBubble(shown);
+      if (S.loopGuard && looping(shown)) { loopHit = true; chatCtrl.abort(); }
+    }, chatCtrl.signal);
+  } catch (e) {
+    if (!(e && e.name === 'AbortError')) { failed = true; showMsg(explainError(e), 'error'); }
+  } finally {
+    chatBusy = false; chatCtrl = null;
+  }
+  if (loopHit) {
+    const tail = shown.slice(-24);
+    const first = shown.indexOf(tail);
+    if (first >= 0) shown = shown.slice(0, first + tail.length);
+    msg.content = shown;
+    showMsg('同じ文章の繰り返しを検知して、止めました。\nTemperatureか繰り返しペナルティを少し上げてみてください。', 'warn');
+  }
+  msg.content = msg.content.trim();
+  if (!msg.content) {
+    const idx = c.messages.indexOf(msg);
+    if (idx >= 0) c.messages.splice(idx, 1);
+    if (restore) c.messages.push(restore);
+    if (!failed && !loopHit) showMsg('モデルから空の返答が返りました。\n・最大出力を増やす\n・「送信内容」で内容を確認する\n・別のモデルを試す\nのどれかをお試しください。', 'warn');
+  } else if (!failed && !loopHit && finish === 'length') {
+    showMsg('最大出力に達したので、返事が途中で切れている可能性があります。設定で「会話の最大出力」を増やせます。', 'warn');
+  }
+  c.updated = Date.now();
+  renderChat();
+  save();
+}
+function chatSend() {
+  if (chatBusy) return;
+  const ta = $('#chatInput');
+  const text = ta.value.trim();
+  if (!text) return;
+  hideMsg();
+  const bad = validate();
+  if (bad) { showMsg(bad.msg, 'error'); if (bad.tab) setTab(bad.tab); return; }
+  const c = ensureChat();
+  chatEditing = -1;
+  c.messages.push({ role: 'user', content: text });
+  if (c.messages.length === 1) c.title = text.replace(/\s+/g, ' ').slice(0, 24);
+  ta.value = ''; S.chatDraft = ''; autoGrow();
+  chatGenerate();
+}
+function chatStop() { if (chatCtrl) chatCtrl.abort(); }
+function chatRegen() {
+  const c = curChat();
+  if (!c || chatBusy) return;
+  let old = null;
+  if (c.messages.length && c.messages[c.messages.length - 1].role === 'assistant') old = c.messages.pop();
+  if (!c.messages.length || c.messages[c.messages.length - 1].role !== 'user') { if (old) c.messages.push(old); return; }
+  chatGenerate(old);
+}
+function openHistory() {
+  if (chatBusy) return;
+  const list = $('#histList');
+  list.textContent = '';
+  if (!S.chats.length) list.appendChild(el('p', 'hint', '会話の履歴はまだありません。')).style.padding = '0.75rem 0.875rem';
+  S.chats.forEach(c => {
+    const row = el('div', 'hist-row' + (c.id === S.chatId ? ' cur' : ''));
+    const pick = el('button', 'pick'); pick.type = 'button';
+    pick.appendChild(el('b', null, c.title || '(無題)'));
+    const d = new Date(c.updated || Date.now());
+    pick.appendChild(el('span', 'muted', d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' ・ ' + c.messages.length + '件'));
+    pick.addEventListener('click', () => { S.chatId = c.id; chatEditing = -1; chatStick = true; $('#histDlg').close(); renderChat(); scheduleSave(); });
+    row.appendChild(pick);
+    const del = el('button', 'mini', '削除'); del.type = 'button';
+    arm(del, '削除', () => {
+      S.chats = S.chats.filter(x => x.id !== c.id);
+      if (S.chatId === c.id) S.chatId = '';
+      renderChat(); scheduleSave(); openHistory();
+    });
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+  const dlg = $('#histDlg');
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+}
+function chatPreviewText() {
+  const c = curChat();
+  if (!c || !c.messages.length) return '会話がまだありません。';
+  // 最後が返事なら、「再生成」で送る内容を見せる
+  const msgs = c.messages.slice();
+  if (msgs.length && msgs[msgs.length - 1].role === 'assistant') msgs.pop();
+  let req;
+  try { req = buildChatRequest({ ...c, messages: msgs }); } catch (e) { return e.message; }
+  return formatReq(req);
+}
+
+/* ---------- 書き出し・読み込み ---------- */
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function stamp() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
+}
+async function copyStory() {
+  try { await navigator.clipboard.writeText(S.story); showMsg('本文をコピーしました。', 'ok'); }
+  catch (_) {
+    const el = $('#f-story'); el.focus(); el.select();
+    try { document.execCommand('copy'); showMsg('本文をコピーしました。', 'ok'); }
+    catch (e) { showMsg('コピーできませんでした。本文を長押しして、コピーしてください。', 'warn'); }
+  }
+}
+
+/* ---------- 起動 ---------- */
+/* キーボードが出たとき、画面ごと押し上げられないよう、見えている範囲に画面を合わせる */
+function fitViewport() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  document.documentElement.style.setProperty('--app-h', Math.round(vv.height) + 'px');
+  document.body.style.transform = vv.offsetTop > 0 ? 'translateY(' + Math.round(vv.offsetTop) + 'px)' : '';
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+}
+function setupViewport() {
+  const vv = window.visualViewport;
+  if (vv) { vv.addEventListener('resize', fitViewport); vv.addEventListener('scroll', fitViewport); }
+  window.addEventListener('scroll', () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); }, { passive: true });
+  window.addEventListener('orientationchange', () => setTimeout(fitViewport, 300));
+  document.addEventListener('focusin', () => { fitViewport(); setTimeout(fitViewport, 120); setTimeout(fitViewport, 400); });
+  document.addEventListener('focusout', () => setTimeout(fitViewport, 200));
+  fitViewport();
+}
+
+function init() {
+  setupViewport();
+  load();
+  S = { ...DEFAULTS, ...S };
+  if (!Array.isArray(S.chats)) S.chats = [];
+  bindFields();
+  applyFont();
+  updateCount();
+  updateStoreNote();
+  updateUI();
+  $('#chatInput').value = S.chatDraft || '';
+  autoGrow();
+  renderChat();
+
+  CHIPS.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = t.replace(/、?続きを書いてください。$/, '') || '続きを書く';
+    b.addEventListener('click', () => { S.instruction = t; $('#f-instruction').value = t; scheduleSave(); });
+    $('#chips').appendChild(b);
+  });
+
+  $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  $('#msgClose').addEventListener('click', hideMsg);
+  $('#chatSend').addEventListener('click', () => { if (chatBusy) chatStop(); else chatSend(); });
+  $('#newChatBtn').addEventListener('click', newChat);
+  $('#histBtn').addEventListener('click', openHistory);
+  $('#histClose').addEventListener('click', () => $('#histDlg').close());
+  $('#histDlg').addEventListener('click', e => { if (e.target.id === 'histDlg') e.target.close(); });
+  $('#chatPreviewBtn').addEventListener('click', () => {
+    $('#previewBody').textContent = chatPreviewText();
+    const dlg = $('#previewDlg');
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  });
+  $('#chatInput').addEventListener('input', () => { S.chatDraft = $('#chatInput').value; autoGrow(); scheduleSave(); });
+  $('#chatList').addEventListener('scroll', () => {
+    const b = $('#chatList');
+    chatStick = b.scrollHeight - b.scrollTop - b.clientHeight < 80;
+  }, { passive: true });
+  $('#genBtn').addEventListener('click', () => generate(false));
+  $('#stopBtn').addEventListener('click', stop);
+  $('#undoBtn').addEventListener('click', undo);
+  $('#regenBtn').addEventListener('click', () => generate(true));
+  $('#previewBtn').addEventListener('click', () => {
+    $('#previewBody').textContent = previewText();
+    const dlg = $('#previewDlg');
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  });
+  $('#previewClose').addEventListener('click', () => $('#previewDlg').close());
+  $('#previewDlg').addEventListener('click', e => { if (e.target.id === 'previewDlg') e.target.close(); });
+  $('#testBtn').addEventListener('click', testConnection);
+  $('#copyBtn').addEventListener('click', copyStory);
+  $('#saveTxt').addEventListener('click', () => {
+    if (!S.story.trim()) { showMsg('本文が空です。', 'warn'); return; }
+    download('story-' + stamp() + '.txt', S.story, 'text/plain;charset=utf-8');
+  });
+  $('#fontUp').addEventListener('click', () => { S.fontSize = Math.min(32, (Number(S.fontSize) || 17) + 1); $('#f-fontSize').value = S.fontSize; applyFont(); scheduleSave(); });
+  $('#fontDown').addEventListener('click', () => { S.fontSize = Math.max(10, (Number(S.fontSize) || 17) - 1); $('#f-fontSize').value = S.fontSize; applyFont(); scheduleSave(); });
+
+  $('#keyToggle').addEventListener('click', () => {
+    const k = $('#f-apiKey'), show = k.type === 'password';
+    k.type = show ? 'text' : 'password';
+    $('#keyToggle').textContent = show ? '隠す' : '表示';
+  });
+  $('#forgetKey').addEventListener('click', () => {
+    S.apiKey = ''; $('#f-apiKey').value = ''; save(); showMsg('保存したAPIキーを消しました。', 'ok');
+  });
+
+  let armed = false, armTimer = 0;
+  const clearBtn = $('#clearBtn');
+  clearBtn.addEventListener('click', () => {
+    if (!armed) {
+      armed = true;
+      clearBtn.textContent = 'もう一度押すと消去';
+      armTimer = setTimeout(() => { armed = false; clearBtn.textContent = '本文を消去'; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer); armed = false; clearBtn.textContent = '本文を消去';
+    pushUndo(S.story); setStory(''); updateUI();
+    showMsg('本文を消去しました。本文タブの「取消」で戻せます。', 'ok');
+  });
+
+  $('#exportJson').addEventListener('click', () => {
+    const copy = { ...S, apiKey: '' };
+    download('monogatari-backup-' + stamp() + '.json', JSON.stringify(copy, null, 2), 'application/json');
+  });
+  $('#importFile').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const text = await f.text();
+      if (/\.json$/i.test(f.name)) {
+        const j = JSON.parse(text);
+        const keep = S.apiKey;
+        pushUndo(S.story);
+        S = { ...DEFAULTS, ...j, apiKey: keep };
+        for (const [key, type] of Object.entries(FIELDS)) {
+          const el = $('#f-' + key); if (!el) continue;
+          if (type === 'check') el.checked = !!S[key]; else el.value = S[key] ?? '';
+        }
+        if (!Array.isArray(S.chats)) S.chats = [];
+        $('#chatInput').value = S.chatDraft || '';
+        applyFont(); updateCount(); updateUI(); renderChat(); save();
+        showMsg('バックアップを読み込みました。', 'ok');
+      } else {
+        pushUndo(S.story); setStory(text); updateUI();
+        showMsg('テキストを本文として読み込みました。「取消」で戻せます。', 'ok');
+      }
+    } catch (err) { showMsg('読み込めませんでした: ' + err.message, 'error'); }
+  });
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if ($('#panel-story').classList.contains('active')) { e.preventDefault(); if (busy) return; generate(false); }
+      else if ($('#panel-chat').classList.contains('active')) { e.preventDefault(); chatSend(); }
+    }
+  });
+  window.addEventListener('pagehide', save);
+}
+init();
+})();
+</script>
+</body>
+</html>
